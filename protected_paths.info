@@ -1,0 +1,5 @@
+name = Protected Paths
+description = A module to password protect paths
+core = 7.x
+package = other
+dependencies[] = user

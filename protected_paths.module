@@ -1,0 +1,257 @@
+<?php
+/**
+ * @file
+ * This module allows you to protect any path of your website with a secure
+ * password. You can enter alias/urls of paths to protect and set a password.
+ * Admin (uid = 1) or user with bypass protection permission can view page.
+ */
+
+// Define the path to the administration screen.
+define('PROTECTED_PATHS_ADMIN_PATH', 'admin/config/search/protected-paths');
+
+// Define the session expire time
+define('PROTECTED_PATHS_SESSION_EXPIRE_TIME', 60);
+
+/**
+ * Implements hook_init().
+ */
+function protected_paths_init() {
+  // If the user has the permission to skip all protected paths then let them
+  // through.
+  if (user_access('skip protected paths')) {
+    return;
+  }
+
+  // Get the url and the alias.
+  $current_path = current_path();
+  $alias = drupal_get_path_alias($current_path);
+
+  // Only run if we are not currently asking for a password.
+  $url_parts = explode('/', $alias);
+  if ($url_parts[0] !== 'protected-paths') {
+    // Redirect to the password screen if a record exists.
+    if ($machine_name = protected_paths_get_machine_name($alias)) {
+      drupal_goto('protected-paths/' . $machine_name, array('query' => array('destination' => $alias)));
+    }
+  }
+}
+
+/**
+ * Helper function to check whether the path is protected or not.
+ */
+function protected_paths_get_machine_name($alias) {
+  // Get all the sections.
+  // @TODO: This query should probably be cached.
+  $sections = db_select('protected_paths')
+      ->fields('protected_paths', array('paths', 'machine_name'))
+      ->orderby('weight', 'asc')
+      ->execute();
+
+  // Go through all the sections and see if we have a match to an alias.
+  $machine_name = FALSE;
+  foreach ($sections as $section) {
+    // Find a match.
+    if (drupal_match_path($alias, $section->paths)) {
+      $machine_name = $section->machine_name;
+      break;
+    }
+  }
+
+  // If there is a match then take care of setting the session.
+  if ($machine_name) {
+    // If the current session is expired unset our session variables.
+    if (isset($_SESSION['_protected_paths']['passwords'][$machine_name]['expire_time']) && time() >= $_SESSION['_protected_paths']['passwords'][$machine_name]['expire_time']) {
+      unset($_SESSION['_protected_paths']['passwords'][$machine_name]['request_time']);
+      unset($_SESSION['_protected_paths']['passwords'][$machine_name]['expire_time']);
+    }
+
+    // If we have a valid session then it's okay to bypass.
+    if (isset($_SESSION['_protected_paths']['passwords'][$machine_name]['request_time'])) {
+      return FALSE;
+    }
+  }
+
+  return $machine_name;
+}
+
+
+/**
+ * Implements hook_menu().
+ */
+function protected_paths_menu() {
+  $items = array();
+
+  $items[PROTECTED_PATHS_ADMIN_PATH] = array(
+    'title' => 'Protected Paths',
+    'description' => 'List protected paths.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('protected_paths_form'),
+    'access arguments' => array('manage protected paths'),
+    'file' => 'protected_paths.admin.inc',
+  );
+
+  $items[PROTECTED_PATHS_ADMIN_PATH . '/list'] = array(
+    'title' => 'List',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+  );
+
+  $items[PROTECTED_PATHS_ADMIN_PATH . '/add'] = array(
+    'title' => 'Add',
+    'description' => 'Add protected paths form.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('protected_paths_section_form'),
+    'access arguments' => array('manage protected paths'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'protected_paths.admin.inc',
+    'weight' => 1,
+  );
+
+  $items[PROTECTED_PATHS_ADMIN_PATH . '/%protected_paths/edit'] = array(
+    'title' => 'Edit Protected Paths',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('protected_paths_section_form', 4),
+    'access arguments' => array('manage protected paths'),
+    'file' => 'protected_paths.admin.inc',
+  );
+
+  $items[PROTECTED_PATHS_ADMIN_PATH . '/%protected_paths/delete'] = array(
+    'title' => 'Delete Protected Paths',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('protected_paths_delete_confirm', 4),
+    'access arguments' => array('manage protected paths'),
+    'type' => MENU_CALLBACK,
+    'file' => 'protected_paths.admin.inc',
+  );
+
+  $items['protected-paths/%protected_paths'] = array(
+    'title' => 'Protected Page',
+    'description' => 'Enter the password for page access',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('protected_paths_enter_password', 1),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_permission().
+ */
+function protected_paths_permission() {
+  return array(
+    'skip protected paths' => array(
+      'title' => t('Skip protected paths'),
+    ),
+    'manage protected paths' => array(
+      'title' => t('Manage protected paths'),
+    ),
+  );
+}
+
+/**
+ * Implements protected_paths_load callback.
+ */
+function protected_paths_load($machine_name) {
+  return db_select('protected_paths')
+      ->fields('protected_paths', array())
+      ->condition('machine_name', $machine_name)
+      ->range(0, 1)
+      ->execute()
+      ->fetchAssoc();
+}
+
+/**
+ * Implements hook_theme().
+ */
+function protected_paths_theme($existing, $type, $theme, $path) {
+
+  $items['protected_paths_form'] = array(
+    'render element' => 'form',
+    'file' => 'protected_paths.admin.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Callback function for enter password paths.
+ */
+function protected_paths_enter_password($form, &$form_state, $protected_path = NULL) {
+
+  // Get the message for the form.
+  $message = db_select('protected_paths')
+      ->fields('protected_paths', array('message'))
+      ->condition('machine_name', $protected_path['machine_name'])
+      ->range(0, 1)
+      ->execute()
+      ->fetchField();
+
+  // If there is no record return page not found.
+  if ($message === FALSE) {
+    drupal_not_found();
+  }
+
+  // Build our form.
+  $form['description'] = array(
+    '#markup' => $message,
+  );
+
+  $form['password'] = array(
+    '#type' => 'password',
+    '#size' => 20,
+    '#required' => TRUE,
+  );
+
+  $form['machine_name'] = array(
+    '#type' => 'hidden',
+    '#value' => $protected_path['machine_name'],
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Enter Page',
+  );
+
+  return $form;
+}
+
+/**
+ * Implements hook_validate().
+ */
+function protected_paths_enter_password_validate($form, &$form_state) {
+  // Get the current hashed password for the machine name.
+  $hash = db_select('protected_paths')
+      ->fields('protected_paths', array('password'))
+      ->condition('machine_name', $form_state['values']['machine_name'])
+      ->range(0, 1)
+      ->execute()
+      ->fetchField();
+
+  // If no record was found through an error.
+  if ($hash === FALSE) {
+    form_set_error('password', t("I'm sorry there was an error in validating the password."));
+  }
+
+  // Create a fake account object so we can use the user_check_password function.
+  $account = new stdClass();
+  $account->pass = $hash;
+
+  // We need to include some password helper functions.
+  require_once DRUPAL_ROOT . '/includes/password.inc';
+
+  // If the password doesn't match then return an error.
+  if (!user_check_password($form_state['values']['password'], $account)) {
+    form_set_error('password', t("I'm sorry the password you entered does not match our records."));
+  }
+}
+
+/**
+ * Implements hook_submit().
+ */
+function protected_paths_enter_password_submit($form, &$form_state) {
+  // Get the machine name.
+  $machine_name = $form_state['values']['machine_name'];
+  // Set the session times.
+  $_SESSION['_protected_paths']['passwords'][$machine_name]['request_time'] = REQUEST_TIME;
+  $_SESSION['_protected_paths']['passwords'][$machine_name]['expire_time'] = strtotime('+' . PROTECTED_PATHS_SESSION_EXPIRE_TIME . ' minutes');
+}

@@ -1,0 +1,70 @@
+<?php
+
+/**
+ * @file
+ * Protected Paths install file.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function protected_paths_schema() {
+  $schema['protected_paths'] = array(
+    'fields' => array(
+      'machine_name' => array(
+        'description' => 'The primary key always unique.',
+        'type' => 'varchar',
+        'length' => '128',
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'description' => 'The name for the section.',
+        'length' => '128',
+        'not null' => TRUE,
+      ),
+      'password' => array(
+        'type' => 'varchar',
+        'description' => 'The password of the protected node.',
+        'length' => '128',
+        'not null' => TRUE,
+      ),
+      'paths' => array(
+        'type' => 'varchar',
+        'description' => 'The path of the protected node.',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'message' => array(
+        'type' => 'varchar',
+        'description' => 'The title to be displayed on password screen.',
+        'length' => '255',
+        'not null' => FALSE,
+      ),
+      'weight' => array(
+        'type' => 'varchar',
+        'length' => '255',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('machine_name'),
+  );
+  return $schema;
+}
+
+
+/**
+ * Implements hook_uninstall().
+ */
+function protected_paths_uninstall() {
+
+}
+
+/**
+ * Implements hook_enable().
+ */
+function protected_paths_enable() {
+  drupal_set_message(t('The Protected Paths module has been successfully enabled.
+    Visit the <a href="@permissions">permissions</a>, and set the permissions.',
+    array('@permissions' => url('admin/people/permissions', array('fragment' => 'module-protected_paths')))));
+}
