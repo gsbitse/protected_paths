@@ -129,6 +129,7 @@ function protected_paths_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('protected_paths_enter_password', 1),
     'type' => MENU_CALLBACK,
+    'access callback' => TRUE,
   );
 
   return $items;
@@ -177,23 +178,22 @@ function protected_paths_theme($existing, $type, $theme, $path) {
  * Callback function for enter password paths.
  */
 function protected_paths_enter_password($form, &$form_state, $protected_path = NULL) {
-
   // Get the message for the form.
-  $message = db_select('protected_paths')
-      ->fields('protected_paths', array('message'))
+  $section = db_select('protected_paths')
+      ->fields('protected_paths', array('message', 'message_format'))
       ->condition('machine_name', $protected_path['machine_name'])
       ->range(0, 1)
       ->execute()
-      ->fetchField();
+      ->fetchAssoc();
 
   // If there is no record return page not found.
-  if ($message === FALSE) {
+  if ($section === FALSE) {
     drupal_not_found();
   }
 
   // Build our form.
   $form['description'] = array(
-    '#markup' => $message,
+    '#markup' => check_markup($section['message'], $section['message_format']),
   );
 
   $form['password'] = array(

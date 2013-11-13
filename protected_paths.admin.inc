@@ -173,10 +173,11 @@ function protected_paths_section_form($form, &$form_state, $protected_path = NUL
     '#default_value' => $protected_path ? $protected_path['paths'] : '',
   );
   $form['alias_list']['message'] = array(
-    '#type' => 'textarea',
+    '#type' => 'text_format',
     '#title' => t('Message'),
     '#description' => t('Enter a message to display to the user when they are presented with the password protection page.'),
     '#default_value' => $protected_path ? $protected_path['message'] : '',
+    '#format' => (isset($protected_path['message_format'])) ? $protected_path['message_format'] : NULL,
   );
   $form['alias_list']['password'] = array(
     '#type' => 'password_confirm',
@@ -207,7 +208,8 @@ function protected_paths_section_form_submit($form, &$form_state) {
     'name' => $form_state['values']['name'],
     'machine_name' => $form_state['values']['machine_name'],
     'paths' => $form_state['values']['paths'],
-    'message' => $form_state['values']['message'],
+    'message' => $form_state['values']['message']['value'],
+    'message_format' => $form_state['values']['message']['format'],
   );
 
   // If there is a password then hash it and add it to our data array.

@@ -36,9 +36,14 @@ function protected_paths_schema() {
         'not null' => TRUE,
       ),
       'message' => array(
-        'type' => 'varchar',
+        'type' => 'text',
         'description' => 'The title to be displayed on password screen.',
-        'length' => '255',
+        'size' => 'big',
+        'not null' => FALSE,
+      ),
+      'message_format' => array(
+        'type' => 'varchar',
+        'length' => 255,
         'not null' => FALSE,
       ),
       'weight' => array(
